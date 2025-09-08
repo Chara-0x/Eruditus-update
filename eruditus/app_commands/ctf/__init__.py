@@ -137,6 +137,46 @@ class CTF(app_commands.Group):
                 break
         return suggestions
 
+    async def _category_autocompletion_func(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[Choice[str]]:
+        """Autocomplete challenge category (plus an 'all' option).
+
+        Args:
+            interaction: The interaction that triggered this command.
+            current: The category typed so far.
+
+        Returns:
+            A list of suggestions.
+        """
+        ctf = get_ctf_info(guild_category=interaction.channel.category_id)
+        if ctf is None:
+            return []
+
+        categories: set[str] = set()
+        for challenge_id in ctf["challenges"]:
+            challenge = get_challenge_info(_id=challenge_id)
+            if challenge is None or challenge.get("solved"):
+                continue
+            cat = str(challenge.get("category", "")).strip()
+            if cat:
+                categories.add(cat)
+
+        suggestions: list[Choice[str]] = []
+        # Always propose the 'all' option first if it matches the filter
+        if not current.strip() or "all".startswith(current.lower()) or (
+            current.lower() in "all"
+        ):
+            suggestions.append(Choice(name="All categories", value="all"))
+
+        for cat in sorted(categories):
+            display = cat
+            if not current.strip() or current.lower() in display.lower():
+                suggestions.append(Choice(name=display, value=cat))
+            if len(suggestions) == 25:
+                break
+        return suggestions
+
     @app_commands.checks.bot_has_permissions(manage_channels=True, manage_roles=True)
     @app_commands.checks.has_permissions(manage_channels=True, manage_roles=True)
     @app_commands.command()
@@ -1041,15 +1081,99 @@ class CTF(app_commands.Group):
 
     @app_commands.checks.bot_has_permissions(manage_channels=True)
     @app_commands.command()
-    @app_commands.autocomplete(name=_challenge_autocompletion_func)  # type: ignore
+    @app_commands.autocomplete(
+        name=_challenge_autocompletion_func,  # type: ignore
+        category=_category_autocompletion_func,  # type: ignore
+    )
     @_in_ctf_channel()
-    async def workon(self, interaction: discord.Interaction, name: str) -> None:
+    async def workon(
+        self,
+        interaction: discord.Interaction,
+        name: Optional[str] = None,
+        category: Optional[str] = None,
+    ) -> None:
         """Start working on a challenge and join its thread.
 
         Args:
             interaction: The interaction that triggered this command.
             name: Challenge name (case insensitive).
+            category: Join all unsolved challenges in this category (or 'all').
         """
+        # Bulk join flow when a category is provided.
+        if category is not None:
+            ctf = get_ctf_info(guild_category=interaction.channel.category_id)
+            if ctf is None:
+                await interaction.response.send_message(
+                    "You must be in a CTF channel to use this command.",
+                    ephemeral=True,
+                )
+                return
+
+            # Normalize category filter
+            join_all = category.lower() == "all"
+
+            joined = 0
+            skipped_already = 0
+            skipped_solved = 0
+            processed = 0
+
+            # Defer in case of many challenges
+            await interaction.response.defer(ephemeral=True)
+
+            for challenge_id in ctf["challenges"]:
+                challenge = get_challenge_info(_id=challenge_id)
+                if challenge is None:
+                    continue
+
+                # Filter by category unless 'all'
+                if not join_all and str(challenge.get("category", "")) != category:
+                    continue
+
+                processed += 1
+
+                if challenge.get("solved"):
+                    skipped_solved += 1
+                    continue
+
+                if interaction.user.name in challenge.get("players", []):
+                    skipped_already += 1
+                    continue
+
+                challenge_thread = discord.utils.get(
+                    interaction.guild.threads, id=challenge["thread"]
+                )
+                if challenge_thread is None:
+                    continue
+                await add_challenge_worker(
+                    challenge_thread, challenge, interaction.user
+                )
+                # Do NOT send "wants to collaborate" message for bulk join
+                joined += 1
+
+            await interaction.followup.send(
+                (
+                    f"✅ Joined {joined} challenge(s)"
+                    + (
+                        f" in category `{category}`" if not join_all else " across all categories"
+                    )
+                    + (
+                        f". Skipped {skipped_already} already joined, {skipped_solved} solved."
+                        if skipped_already or skipped_solved
+                        else "."
+                    )
+                ),
+                ephemeral=True,
+            )
+            return
+
+        # Single-challenge flow (backwards compatible)
+        if not name:
+            await interaction.response.send_message(
+                "Please provide a challenge name or choose a category.",
+                ephemeral=True,
+            )
+            return
+
         challenge = get_challenge_info(name=name)
         if challenge is None:
             await interaction.response.send_message(
