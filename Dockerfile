@@ -1,13 +1,15 @@
 FROM python:3.10
 
-RUN wget https://packages.microsoft.com/config/debian/10/packages-microsoft-prod.deb \
-    -O packages-microsoft-prod.deb \
-    && dpkg -i packages-microsoft-prod.deb \
-    && rm packages-microsoft-prod.deb
+# RUN wget https://packages.microsoft.com/config/debian/10/packages-microsoft-prod.deb \
+#     -O packages-microsoft-prod.deb \
+#     && dpkg -i packages-microsoft-prod.deb \
+#     && rm packages-microsoft-prod.deb
 
-RUN apt-get update && apt-get install -y dotnet-sdk-8.0 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# RUN apt-get update && apt-get install -y dotnet-sdk-8.0 \
+#     && apt-get clean \
+#     && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates libicu-dev     && apt-get clean     && rm -rf /var/lib/apt/lists/*     && curl -sSL https://dot.net/v1/dotnet-install.sh -o /usr/local/bin/dotnet-install     && chmod +x /usr/local/bin/dotnet-install     && /usr/local/bin/dotnet-install --channel 8.0 --install-dir /usr/share/dotnet     && ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet
 
 COPY requirements.txt .
 
@@ -36,7 +38,7 @@ USER user
 # RUN date > /etc/builddate
 RUN git clone https://github.com/hfz1337/DiscordChatExporter ~/DiscordChatExporter
 
-ARG CHATLOGS_REPO=git@github.com:reCAPTCHATheFlag/Eruditus
+ARG CHATLOGS_REPO=git@github.com:Chara-0x/Eruditus.git
 
 RUN git clone --depth=1 $CHATLOGS_REPO ~/chatlogs
 RUN git config --global user.email "eruditus@localhost" && \
