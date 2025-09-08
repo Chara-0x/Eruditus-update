@@ -1101,6 +1101,47 @@ class CTF(app_commands.Group):
             colour=discord.Colour.dark_gold(),
             timestamp=datetime.now(),
         ).set_thumbnail(url=interaction.user.display_avatar.url)
+        # Collect all unique human users who talked in this challenge thread.
+        participants: list[str] = []
+        seen: set[str] = set()
+        async for msg in interaction.channel.history(limit=None, oldest_first=True):
+            try:
+                if getattr(msg.author, "bot", False):
+                    continue
+                name = getattr(msg.author, "name", None)
+                if not name:
+                    continue
+                if name in seen:
+                    continue
+                seen.add(name)
+                participants.append(name)
+            except Exception:
+                continue
+
+        if participants:
+            # Build footer text and trim to fit footer limits.
+            base = "Participants: "
+            parts: list[str] = []
+            remaining = 2000 - len(base)  # conservative limit
+            hidden = 0
+            for p in participants:
+                seg = (", " if parts else "") + p
+                if len(seg) <= remaining:
+                    parts.append(seg)
+                    remaining -= len(seg)
+                else:
+                    hidden += 1
+            footer_text = base + "".join(parts)
+            if hidden:
+                extra = f" (+{hidden} more)"
+                # If there's not enough room for the extra marker, trim the last part
+                if len(footer_text) + len(extra) > 2000:
+                    overflow = len(footer_text) + len(extra) - 2000
+                    if parts:
+                        parts[-1] = parts[-1][:-overflow]
+                        footer_text = base + "".join(parts)
+                footer_text += extra
+            embed.set_footer(text=footer_text)
         solve_announcement = await solves_channel.send(embed=embed)
 
         challenge["solve_announcement"] = solve_announcement.id
@@ -1768,4 +1809,81 @@ class CTF(app_commands.Group):
 
         await interaction.followup.send(
             "Export task started, chat logs will be available shortly.", silent=True
+        )
+
+    @app_commands.checks.bot_has_permissions(manage_channels=True, manage_roles=True)
+    @app_commands.checks.has_permissions(manage_channels=True, manage_roles=True)
+    @app_commands.command()
+    async def exportserverchat(self, interaction: discord.Interaction) -> None:
+        """Export the entire server's chat logs to a static site.
+
+        Queues a job that exports all text channels and their threads (including
+        archived ones) across the guild using the same exporter as category export.
+        """
+
+        async def _handle_process(process: asyncio.subprocess.Process):
+            _, _ = await process.communicate()
+            channel, _, _ = self._chat_export_tasks.pop(0)
+            message = (
+                "Chat export task finished successfully, "
+                f"{len(self._chat_export_tasks)} items remaining in the queue."
+            )
+            try:
+                await channel.send(content=message)
+            except discord.errors.HTTPException as err:
+                _log.error("Failed to send message: %s", err)
+
+            _log.info(message)
+            if len(self._chat_export_tasks) == 0:
+                return
+
+            _, tmp, output_dirname = self._chat_export_tasks[0]
+            asyncio.create_task(
+                _handle_process(
+                    await asyncio.create_subprocess_exec(
+                        "chat_exporter",
+                        tmp,
+                        output_dirname,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                    )
+                )
+            )
+
+        await interaction.response.defer()
+
+        exportable = set()
+        # Include all text channels in the guild and their threads
+        for channel in interaction.guild.text_channels:
+            exportable.add(channel.id)
+
+            for thread in channel.threads:
+                exportable.add(thread.id)
+
+            for private in (True, False):
+                async for thread in channel.archived_threads(private=private, limit=None):
+                    exportable.add(thread.id)
+
+        tmp = tempfile.mktemp()
+        output_dirname = f"[Guild {interaction.guild.id}] {interaction.guild.name.replace('/', '_')}"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write("\n".join(map(str, exportable)))
+
+        self._chat_export_tasks.append((interaction.channel, tmp, output_dirname))
+        if len(self._chat_export_tasks) == 1:
+            asyncio.create_task(
+                _handle_process(
+                    await asyncio.create_subprocess_exec(
+                        "chat_exporter",
+                        tmp,
+                        output_dirname,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                    )
+                )
+            )
+
+        await interaction.followup.send(
+            "Server export task started, chat logs will be available shortly.",
+            silent=True,
         )
