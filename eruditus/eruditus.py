@@ -829,7 +829,7 @@ class Eruditus(discord.Client):
         if not update and not first_run:
             return
 
-        await channel.purge()
+        # await channel.purge()
         for msg in chunks:
             await channel.send(f"```diff\n{msg}```", silent=True)
 
