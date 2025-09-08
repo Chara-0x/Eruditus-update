@@ -27,14 +27,16 @@ COPY chat_exporter /usr/bin/
 RUN chmod a+x /usr/bin/chat_exporter && \
     chown -R user:user /home/user
 
-USER user
+USER root
+RUN date > /etc/builddate
 
+USER user
 # Prevent caching the subsequent "git clone" layer.
 # https://github.com/moby/moby/issues/1996#issuecomment-1152463036
-ADD https://postman-echo.com/time/now /etc/builddate
+# RUN date > /etc/builddate
 RUN git clone https://github.com/hfz1337/DiscordChatExporter ~/DiscordChatExporter
 
-ARG CHATLOGS_REPO=git@github.com:username/repo
+ARG CHATLOGS_REPO=git@github.com:reCAPTCHATheFlag/Eruditus
 
 RUN git clone --depth=1 $CHATLOGS_REPO ~/chatlogs
 RUN git config --global user.email "eruditus@localhost" && \
