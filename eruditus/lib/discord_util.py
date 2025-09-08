@@ -306,5 +306,5 @@ async def update_credentials(
     creds_channel = discord.utils.get(
         interaction.guild.text_channels, id=ctf["guild_channels"]["credentials"]
     )
-    await creds_channel.purge()
+    # await creds_channel.purge()
     await creds_channel.send(credentials["_message"], suppress_embeds=True)

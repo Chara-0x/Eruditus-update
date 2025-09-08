@@ -265,7 +265,7 @@ class Eruditus(discord.Client):
 
             message += "```"
 
-            await creds_channel.purge()
+            # await creds_channel.purge()
             await creds_channel.send(message)
 
     @classmethod
