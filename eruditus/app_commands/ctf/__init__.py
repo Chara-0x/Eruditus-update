@@ -448,112 +448,112 @@ class CTF(app_commands.Group):
             return
         await interaction.followup.send(content=msg)
 
-    @app_commands.checks.bot_has_permissions(manage_channels=True, manage_roles=True)
-    @app_commands.checks.has_permissions(manage_channels=True, manage_roles=True)
-    @app_commands.command()
-    @app_commands.autocomplete(name=_ctf_autocompletion_func)  # type: ignore
-    async def deletectf(
-        self, interaction: discord.Interaction, name: Optional[str] = None
-    ) -> None:
-        """Delete a CTF.
+    # @app_commands.checks.bot_has_permissions(manage_channels=True, manage_roles=True)
+    # @app_commands.checks.has_permissions(manage_channels=True, manage_roles=True)
+    # @app_commands.command()
+    # @app_commands.autocomplete(name=_ctf_autocompletion_func)  # type: ignore
+    # async def deletectf(
+    #     self, interaction: discord.Interaction, name: Optional[str] = None
+    # ) -> None:
+    #     """Delete a CTF.
 
-        Args:
-            interaction: The interaction that triggered this command.
-            name: Name of the CTF to delete (default: CTF associated with the
-                category channel from which the command was issued).
-        """
-        await interaction.response.defer()
+    #     Args:
+    #         interaction: The interaction that triggered this command.
+    #         name: Name of the CTF to delete (default: CTF associated with the
+    #             category channel from which the command was issued).
+    #     """
+    #     await interaction.response.defer()
 
-        if name is not None:
-            ctf = get_ctf_info(name=name)
-        else:
-            ctf = get_ctf_info(guild_category=interaction.channel.category_id)
+    #     if name is not None:
+    #         ctf = get_ctf_info(name=name)
+    #     else:
+    #         ctf = get_ctf_info(guild_category=interaction.channel.category_id)
 
-        if not ctf:
-            await interaction.followup.send(
-                (
-                    (
-                        "Run this command from within a CTF channel, or provide the "
-                        "name of the CTF you wish to delete."
-                    )
-                    if name is None
-                    else "No such CTF."
-                ),
-                ephemeral=True,
-            )
-            return
+    #     if not ctf:
+    #         await interaction.followup.send(
+    #             (
+    #                 (
+    #                     "Run this command from within a CTF channel, or provide the "
+    #                     "name of the CTF you wish to delete."
+    #                 )
+    #                 if name is None
+    #                 else "No such CTF."
+    #             ),
+    #             ephemeral=True,
+    #         )
+    #         return
 
-        category_channel = discord.utils.get(
-            interaction.guild.categories, id=ctf["guild_category"]
-        )
-        role = discord.utils.get(interaction.guild.roles, id=ctf["guild_role"])
+    #     category_channel = discord.utils.get(
+    #         interaction.guild.categories, id=ctf["guild_category"]
+    #     )
+    #     role = discord.utils.get(interaction.guild.roles, id=ctf["guild_role"])
 
-        # Delete all channels.
-        for ctf_channel in category_channel.channels:
-            await ctf_channel.delete()
+    #     # Delete all channels.
+    #     for ctf_channel in category_channel.channels:
+    #         await ctf_channel.delete()
 
-        # Delete the category channel.
-        await category_channel.delete()
+    #     # Delete the category channel.
+    #     await category_channel.delete()
 
-        # Delete the CTF role.
-        if role:
-            await role.delete()
+    #     # Delete the CTF role.
+    #     if role:
+    #         await role.delete()
 
-        # Delete all challenges for that CTF from the database.
-        for challenge_id in ctf["challenges"]:
-            MONGO[DBNAME][CHALLENGE_COLLECTION].delete_one({"_id": challenge_id})
+    #     # Delete all challenges for that CTF from the database.
+    #     for challenge_id in ctf["challenges"]:
+    #         MONGO[DBNAME][CHALLENGE_COLLECTION].delete_one({"_id": challenge_id})
 
-        # Delete the CTF from the database.
-        MONGO[DBNAME][CTF_COLLECTION].delete_one({"_id": ctf["_id"]})
+    #     # Delete the CTF from the database.
+    #     MONGO[DBNAME][CTF_COLLECTION].delete_one({"_id": ctf["_id"]})
 
-        # Only send a followup message if the channel from which the command was issued
-        # still exists, otherwise we will fail with a 404 not found.
-        if name and interaction.channel.category_id != category_channel.id:
-            await interaction.followup.send(f"✅ CTF `{ctf['name']}` has been deleted.")
+    #     # Only send a followup message if the channel from which the command was issued
+    #     # still exists, otherwise we will fail with a 404 not found.
+    #     if name and interaction.channel.category_id != category_channel.id:
+    #         await interaction.followup.send(f"✅ CTF `{ctf['name']}` has been deleted.")
 
-    @app_commands.checks.bot_has_permissions(manage_channels=True, manage_roles=True)
-    @app_commands.checks.has_permissions(manage_channels=True, manage_roles=True)
-    @app_commands.command()
-    async def setprivacy(
-        self,
-        interaction: discord.Interaction,
-        privacy: Privacy,
-        name: Optional[str] = None,
-    ) -> None:
-        """Toggle a CTF privacy. Making the CTF private disallows others from joining
-        the CTF and would require an admin invitation.
+    # @app_commands.checks.bot_has_permissions(manage_channels=True, manage_roles=True)
+    # @app_commands.checks.has_permissions(manage_channels=True, manage_roles=True)
+    # @app_commands.command()
+    # async def setprivacy(
+    #     self,
+    #     interaction: discord.Interaction,
+    #     privacy: Privacy,
+    #     name: Optional[str] = None,
+    # ) -> None:
+    #     """Toggle a CTF privacy. Making the CTF private disallows others from joining
+    #     the CTF and would require an admin invitation.
 
-        Args:
-            interaction: The interaction that triggered this command.
-            name: Name of the CTF to delete (default: CTF associated with the
-                category channel from which the command was issued).
-            privacy: The CTF privacy.
-        """
-        if name is not None:
-            ctf = get_ctf_info(name=name)
-        else:
-            ctf = get_ctf_info(guild_category=interaction.channel.category_id)
+    #     Args:
+    #         interaction: The interaction that triggered this command.
+    #         name: Name of the CTF to delete (default: CTF associated with the
+    #             category channel from which the command was issued).
+    #         privacy: The CTF privacy.
+    #     """
+    #     if name is not None:
+    #         ctf = get_ctf_info(name=name)
+    #     else:
+    #         ctf = get_ctf_info(guild_category=interaction.channel.category_id)
 
-        if not ctf:
-            await interaction.followup.send(
-                (
-                    (
-                        "Run this command from within a CTF channel, or provide the "
-                        "name of the CTF for which you wish to change the privacy."
-                    )
-                    if name is None
-                    else "No such CTF."
-                ),
-                ephemeral=True,
-            )
-            return
+    #     if not ctf:
+    #         await interaction.followup.send(
+    #             (
+    #                 (
+    #                     "Run this command from within a CTF channel, or provide the "
+    #                     "name of the CTF for which you wish to change the privacy."
+    #                 )
+    #                 if name is None
+    #                 else "No such CTF."
+    #             ),
+    #             ephemeral=True,
+    #         )
+    #         return
 
-        MONGO[DBNAME][CTF_COLLECTION].update_one(
-            {"_id": ctf["_id"]}, {"$set": {"private": bool(privacy.value)}}
-        )
-        await interaction.response.send_message(
-            f"CTF privacy changed to `{privacy.name}`", ephemeral=True
-        )
+    #     MONGO[DBNAME][CTF_COLLECTION].update_one(
+    #         {"_id": ctf["_id"]}, {"$set": {"private": bool(privacy.value)}}
+    #     )
+    #     await interaction.response.send_message(
+    #         f"CTF privacy changed to `{privacy.name}`", ephemeral=True
+    #     )
 
     @app_commands.checks.bot_has_permissions(manage_roles=True)
     @app_commands.checks.has_permissions(manage_roles=True)
