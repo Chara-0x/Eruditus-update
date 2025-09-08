@@ -33,9 +33,9 @@ class _WorkonButton(discord.ui.Button):
             view=UnworkonButton(oid=self.oid),
             ephemeral=True,
         )
-        await challenge_thread.send(
-            f"{interaction.user.mention} wants to collaborate 🤝"
-        )
+        # await challenge_thread.send(
+        #     f"{interaction.user.mention} wants to collaborate 🤝"
+        # )
 
 
 class WorkonButton(discord.ui.View):

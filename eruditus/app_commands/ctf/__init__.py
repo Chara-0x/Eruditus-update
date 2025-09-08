@@ -1201,9 +1201,9 @@ class CTF(app_commands.Group):
         await interaction.response.send_message(
             f"✅ Added to the `{challenge['name']}` challenge."
         )
-        await challenge_thread.send(
-            f"{interaction.user.mention} wants to collaborate 🤝"
-        )
+        # await challenge_thread.send(
+        #     f"{interaction.user.mention} wants to collaborate 🤝"
+        # )
 
     @app_commands.checks.bot_has_permissions(manage_channels=True)
     @app_commands.command()
