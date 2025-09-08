@@ -1,4 +1,5 @@
 import asyncio
+import ast
 import logging
 import subprocess
 import tempfile
@@ -798,6 +799,142 @@ class CTF(app_commands.Group):
         )
         await text_channel.edit(
             name=text_channel.name.replace("💤", "🔄").replace("🎯", "🔄")
+        )
+
+    @app_commands.checks.bot_has_permissions(manage_channels=True)
+    @app_commands.command()
+    @_in_ctf_channel()
+    async def createchallenges(
+        self,
+        interaction: discord.Interaction,
+        name: str,
+        category: str,
+    ) -> None:
+        """Create multiple challenges at once for the current CTF.
+
+        Args:
+            interaction: The interaction that triggered this command.
+            name: Python list literal with challenge names (e.g., "['a','b']").
+            category: Category of the challenges.
+        """
+        await interaction.response.defer()
+
+        # Normalize category like single createchallenge
+        category = category.title().strip()
+
+        # Parse the list of names; prefer literal_eval for safety
+        try:
+            names = ast.literal_eval(name)
+            if not isinstance(names, (list, tuple)):
+                raise ValueError
+            names = [str(n) for n in names]
+        except Exception:
+            await interaction.followup.send(
+                "Invalid name list. Provide a list literal like ['a','b'].",
+                ephemeral=True,
+            )
+            return
+
+        ctf = get_ctf_info(guild_category=interaction.channel.category_id)
+        if ctf is None:
+            await interaction.followup.send(
+                "You must be in a CTF channel to use this command.",
+                ephemeral=True,
+            )
+            return
+
+        if ctf.get("archived"):
+            await interaction.followup.send("This CTF is archived.", ephemeral=True)
+            return
+
+        category_channel = discord.utils.get(
+            interaction.guild.categories, id=interaction.channel.category_id
+        )
+        text_channel = await get_challenge_category_channel(
+            interaction.guild, category_channel, category
+        )
+
+        # Prepare common context for announcements
+        announcements_channel = discord.utils.get(
+            interaction.guild.text_channels, id=ctf["guild_channels"]["announcements"]
+        )
+        role = discord.utils.get(interaction.guild.roles, id=ctf["guild_role"])
+
+        created = 0
+        duplicates = 0
+        challenge_oids: list[ObjectId] = []
+
+        for ch_name in names:
+            # Skip empty-ish names after str() cast
+            if not ch_name or not ch_name.strip():
+                continue
+
+            if get_challenge_info(name=ch_name, category=category):
+                duplicates += 1
+                continue
+
+            # Create private thread for the challenge
+            thread_name = sanitize_channel_name(ch_name)
+            challenge_thread = await text_channel.create_thread(
+                name=f"❌-{thread_name}", invitable=False
+            )
+
+            # Create challenge document id
+            challenge_oid = ObjectId()
+
+            # Announce new challenge
+            embed = discord.Embed(
+                title="🔔 New challenge created!",
+                description=(
+                    f"**Challenge name:** {ch_name}\n"
+                    f"**Category:** {category}\n\n"
+                    f"Use `/ctf workon {ch_name}` or the button to join.\n"
+                    f"{role.mention}"
+                ),
+                colour=discord.Colour.dark_gold(),
+                timestamp=datetime.now(),
+            )
+            announcement = await announcements_channel.send(
+                embed=embed, view=WorkonButton(oid=challenge_oid)
+            )
+
+            # Persist challenge
+            MONGO[DBNAME][CHALLENGE_COLLECTION].insert_one(
+                {
+                    "_id": challenge_oid,
+                    "id": None,
+                    "name": ch_name,
+                    "category": category,
+                    "thread": challenge_thread.id,
+                    "solved": False,
+                    "blooded": False,
+                    "players": [],
+                    "announcement": announcement.id,
+                    "solve_time": None,
+                    "solve_announcement": None,
+                    "flag": None,
+                }
+            )
+
+            challenge_oids.append(challenge_oid)
+            created += 1
+
+        # Update CTF document if we created any
+        if created:
+            ctf["challenges"].extend(challenge_oids)
+            MONGO[DBNAME][CTF_COLLECTION].update_one(
+                {"_id": ctf["_id"]}, {"$set": {"challenges": ctf["challenges"]}}
+            )
+            await text_channel.edit(
+                name=text_channel.name.replace("💤", "🔄").replace("🎯", "🔄")
+            )
+
+        await interaction.followup.send(
+            (
+                f"✅ Created {created} challenge(s) in `{category}`."
+                + (f" Skipped {duplicates} duplicate(s)." if duplicates else "")
+            ),
+            ephemeral=True,
         )
 
     @app_commands.checks.bot_has_permissions(manage_channels=True)
